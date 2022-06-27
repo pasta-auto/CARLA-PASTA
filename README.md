@@ -12,10 +12,10 @@
 1. Please download a Python 3.7.9 (64 bit) installer from https://www.python.org/downloads/windows/
 1. Put this installer into `carla-can-device-co-sim`
 1. Double-click `InstallPython4CARLA.bat` in the `carla-can-device-co-sim` folder.
+1. A terminal will open as well as the Python installer
 1. During the installation process, please check your installer screen as the following screenshot shows. Then follow the installer instructions.
     ![PythonInstall](PythonInstall.png)
-
-* During this process, `InstallPython4CARLA.bat` will automatically install the following 3rd-party packages.
+1. After the Python installation, the terminal window will prompt you for a password to be able to use the newly installed Python to install additional Python packages listed below
     ```
     numpy==1.19.5
     pygame==2.0.0
