@@ -598,7 +598,7 @@ class KeyboardControl(object):
             elif event.type == pygame.KEYDOWN:
                 # want this to send 1 while holding up and have KEYUP event resent to sending 0
                 # TODO probably can kill manual_gear shift / vehicle control checks here; should probably never have a walker or automatic gear for manual control anymore I think
-                if isinstance(self._control, carla.VehicleControl) and not self.use_joystick:
+                if isinstance(self._control, carla.VehicleControl):
                     if   self._control.manual_gear_shift and event.key == K_COMMA:
                         self.gear_down(world)
                     elif self._control.manual_gear_shift and event.key == K_PERIOD:
@@ -740,7 +740,7 @@ class KeyboardControl(object):
                 else: # not in D or L just 0 it
                     self._control.throttle          = 0
                     self._control.steer             = 0
-                    self._control.brake             = 0
+                    self._control.brake             = 1
                     self._control.manual_gear_shift = True 
 
                 # print(agent_control)
@@ -1720,7 +1720,6 @@ def game_loop(args):
             pts_left = (len(agent.get_local_planner().waypoints_queue) - num_min_waypoints) + len(agent.get_local_planner()._waypoint_buffer) + 1
             if not g_reached_goal and pts_left <= 0:
                 g_reached_goal = True
-                controller._autopilot_enabled = False
                 tot_target_reached += 1
                 world.hud.notification("The target has been reached " +
                                         str(tot_target_reached) + " times. Stopping Autopillot", seconds=4.0)
