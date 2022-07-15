@@ -697,24 +697,23 @@ class KeyboardControl(object):
                             self._control.brake      = self._last_joystick.brake
                             self._control.hand_brake = self._last_joystick.hand_brake
                             self._control.gear       = self._last_joystick.gear
-                    if not self.use_joystick:
-                        if event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:
-                            self._otherLights ^= carla.VehicleLightState.Special1
-                        elif event.key == K_l and pygame.key.get_mods() & KMOD_SHIFT:
-                            self._frontLights ^= carla.VehicleLightState.HighBeam
-                        elif event.key == K_l:
-                            # Use 'L' key to switch between lights:
-                            self.cycle_lights(world)
-                        elif event.key == K_i:
-                            self._otherLights ^= carla.VehicleLightState.Interior
-                        elif event.key == K_z:
-                            self._turnLights ^= carla.VehicleLightState.LeftBlinker
-                        elif event.key == K_x:
-                            self._turnLights ^= carla.VehicleLightState.RightBlinker
-                        elif self._control.manual_gear_shift and event.key == K_COMMA:
-                            self._gear_change = 0
-                        elif self._control.manual_gear_shift and event.key == K_PERIOD:
-                            self._gear_change = 0
+                    if event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:
+                        self._otherLights ^= carla.VehicleLightState.Special1
+                    elif event.key == K_l and pygame.key.get_mods() & KMOD_SHIFT:
+                        self._frontLights ^= carla.VehicleLightState.HighBeam
+                    elif event.key == K_l:
+                        # Use 'L' key to switch between lights:
+                        self.cycle_lights(world)
+                    elif event.key == K_i:
+                        self._otherLights ^= carla.VehicleLightState.Interior
+                    elif event.key == K_z:
+                        self._turnLights ^= carla.VehicleLightState.LeftBlinker
+                    elif event.key == K_x:
+                        self._turnLights ^= carla.VehicleLightState.RightBlinker
+                    elif self._control.manual_gear_shift and event.key == K_COMMA:
+                        self._gear_change = 0
+                    elif self._control.manual_gear_shift and event.key == K_PERIOD:
+                        self._gear_change = 0
                     if event.key == K_RETURN:
                         if args.mode == 0:
                             g_ignition_on = not g_ignition_on
