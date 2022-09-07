@@ -140,15 +140,34 @@ class CanServer(object):
         self.sockIn.setblocking(True)
         self.sockIn.bind((Args.host, Args.port))
         
-        self.recT = threading.Thread(target=self.receiveThread, group=None, daemon=True)
+        self.recT  = threading.Thread(target=self.receiveThread , group=None, daemon=True)
+        self.modeT = threading.Thread(target=self.modeSendThread, group=None, daemon=True)
 
         self.recT.start()
+        self.modeT.start()
         while(True):
             time.sleep(1)
             if g_quit:
                 return
             
-            
+    def modeSendThread(self):
+        current_time = datetime.datetime.now()
+        time_period = datetime.timedelta(milliseconds=500)
+        lfa6uModeSet = bytes("t7D0800FF0" + str(Args.mode) + "FFFFFFFFFF\r\n", 'ascii')
+        goal = current_time + time_period
+        while(True):
+            current_time = datetime.datetime.now()
+            if current_time > goal:
+                goal = current_time + time_period
+                try:
+                    if Args.lfa6u:
+                        self.lfa6uSer.write(lfa6uModeSet)
+                except serial.serialutil.SerialTimeoutException as e:
+                    logging.debug(e)
+            time.sleep(0.01)
+            if g_quit:
+                quit()
+
     def receiveThread(self):
         while(True):
             recData = None
@@ -174,6 +193,8 @@ class CanServer(object):
                             if Args.debug_send_id and Args.debug_send_id == id:
                                 logging.debug("sent: " + formatedStr)
                             self.lfa6uSer.write(bytes(formatedStr+"\r\n", "ascii"))
+            except serial.serialutil.SerialTimeoutException as e:
+                logging.debug(e)
 
             except Exception as e:
                 logging.error("Data processing error")
