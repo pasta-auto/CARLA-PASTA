@@ -527,6 +527,7 @@ class KeyboardControl(object):
         if isinstance(self._control, carla.VehicleControl):
             current_lights    = self._lights
         global g_ignition_on
+        pastaControl = self.mode == 1
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
@@ -571,7 +572,7 @@ class KeyboardControl(object):
             elif event.type == pygame.JOYBUTTONDOWN:
                 if args.debug_controller:
                     print(event)
-                if not self.use_joystick:
+                if not self.use_joystick or pastaControl:
                     continue
                 if   event.dict['button'] == self.shift_up_idx:
                     self.gear_up(world)
@@ -598,7 +599,7 @@ class KeyboardControl(object):
             elif event.type == pygame.KEYDOWN:
                 # want this to send 1 while holding up and have KEYUP event resent to sending 0
                 # TODO probably can kill manual_gear shift / vehicle control checks here; should probably never have a walker or automatic gear for manual control anymore I think
-                if isinstance(self._control, carla.VehicleControl) and not self.use_joystick:
+                if isinstance(self._control, carla.VehicleControl):
                     if   self._control.manual_gear_shift and event.key == K_COMMA:
                         self.gear_down(world)
                     elif self._control.manual_gear_shift and event.key == K_PERIOD:
@@ -678,26 +679,26 @@ class KeyboardControl(object):
                         world.recording_start += 1
                     world.hud.notification("Recording start time is %d" % (world.recording_start))
                 if isinstance(self._control, carla.VehicleControl):
-                    if event.key == K_o:
-                        global g_reroute_agent
-                        world.hud.notification('Setting a new autopilot route')
-                        g_reroute_agent = True
-                    elif event.key == K_LEFTBRACKET:
-                        args.debug_auto_waypoint = not args.debug_auto_waypoint
-                        world.hud.notification(
-                            'Show autopilot waypoints %s' % ('On' if args.debug_auto_waypoint else 'Off'))
-                    elif event.key == K_p and not pygame.key.get_mods() & KMOD_CTRL:
-                        self._autopilot_enabled = not self._autopilot_enabled
-                        world.hud.notification(
-                            'Autopilot %s' % ('On' if self._autopilot_enabled else 'Off'))
-                        # when turn off autopilot need to load joystick values changes we got while it was on
-                        if not self._autopilot_enabled:
-                            self._control.throttle   = self._last_joystick.throttle
-                            self._control.steer      = self._last_joystick.steer
-                            self._control.brake      = self._last_joystick.brake
-                            self._control.hand_brake = self._last_joystick.hand_brake
-                            self._control.gear       = self._last_joystick.gear
-                    if not self.use_joystick:
+                    if not pastaControl:
+                        if event.key == K_o:
+                            global g_reroute_agent
+                            world.hud.notification('Setting a new autopilot route')
+                            g_reroute_agent = True
+                        elif event.key == K_LEFTBRACKET:
+                            args.debug_auto_waypoint = not args.debug_auto_waypoint
+                            world.hud.notification(
+                                'Show autopilot waypoints %s' % ('On' if args.debug_auto_waypoint else 'Off'))
+                        elif event.key == K_p and not pygame.key.get_mods() & KMOD_CTRL:
+                            self._autopilot_enabled = not self._autopilot_enabled
+                            world.hud.notification(
+                                'Autopilot %s' % ('On' if self._autopilot_enabled else 'Off'))
+                            # when turn off autopilot need to load joystick values changes we got while it was on
+                            if not self._autopilot_enabled:
+                                self._control.throttle   = self._last_joystick.throttle
+                                self._control.steer      = self._last_joystick.steer
+                                self._control.brake      = self._last_joystick.brake
+                                self._control.hand_brake = self._last_joystick.hand_brake
+                                self._control.gear       = self._last_joystick.gear
                         if event.key == K_l and pygame.key.get_mods() & KMOD_CTRL:
                             self._otherLights ^= carla.VehicleLightState.Special1
                         elif event.key == K_l and pygame.key.get_mods() & KMOD_SHIFT:
@@ -715,9 +716,9 @@ class KeyboardControl(object):
                             self._gear_change = 0
                         elif self._control.manual_gear_shift and event.key == K_PERIOD:
                             self._gear_change = 0
-                    if event.key == K_RETURN:
-                        if args.mode == 0:
-                            g_ignition_on = not g_ignition_on
+                        if event.key == K_RETURN:
+                            if args.mode == 0:
+                                g_ignition_on = not g_ignition_on
 
             #else:
             #    print("Unknown event", event)
@@ -740,7 +741,7 @@ class KeyboardControl(object):
                 else: # not in D or L just 0 it
                     self._control.throttle          = 0
                     self._control.steer             = 0
-                    self._control.brake             = 0
+                    self._control.brake             = 1
                     self._control.manual_gear_shift = True 
 
                 # print(agent_control)
@@ -908,6 +909,7 @@ class HUD(object):
         self.auto_pilot_pts_until_goal = 21
         self.sensor_type = ''
         self.sensor_params = []
+        self.prev_lights = carla.VehicleLightState.NONE
 
     def set_autopilot_targets(self, auto_pilot_goal, auto_pilot_next, pts):
         self.auto_pilot_goal = auto_pilot_goal
@@ -1048,7 +1050,7 @@ class HUD(object):
                 vehicle_type = get_actor_display_name(vehicle, truncate=22)
                 self._info_text.append('% 4dm %s' % (d, vehicle_type))
 
-    def set_pasta_control(self, control, rpm, kmh, gear):
+    def set_pasta_control(self, control, rpm, kmh, gear, frontLights):
         self.pasta_control = control
         self.pasta_rpm = rpm
         self.pasta_kmh = kmh
@@ -1058,6 +1060,16 @@ class HUD(object):
             gear = len(self.pasta_gears)
         if self.mode !=0: # if we are applying gear ourselves don't want PASTA changing it
             self.external_gear = self.pasta_gears[gear - 1]
+        if frontLights != self.prev_lights:
+            if   frontLights & carla.VehicleLightState.HighBeam:
+                self.notification("High beam lights")
+            elif frontLights & carla.VehicleLightState.LowBeam:
+                self.notification("Low beam lights")
+            elif frontLights & carla.VehicleLightState.Position:
+                self.notification("Position lights")
+            else:
+                self.notification("Lights Off")
+            self.prev_lights = frontLights
 
     def toggle_info(self):
         self._show_info = not self._show_info
@@ -1499,7 +1511,21 @@ def handle_PASTA_sending(sock, mode, can_addr):
         try:
             prec = g_pre_player.get_control()
             v    = g_pre_player.get_velocity()
-            kmh = int(3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
+            kmhF = 3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)
+            kmh = int(kmhF)
+            steer_mode_1 = 0
+            if kmhF > 0.01: # if moving
+                if g_pasta_gear != 2: # and going forward (not in R)
+                    steer_mode_1 = 0
+                else:
+                    steer_mode_1 = 2 * prec.steer
+            else:
+                steer_mode_1 = prec.steer
+            torque = kmh
+            if torque < 0:
+                torque = 0
+            if torque > 100:
+                torque = 100
             engine_rpm = g_rpm_this_tick
             engine_rpm = int(engine_rpm)
             if mode == 1: # SLCAN
@@ -1509,9 +1535,8 @@ def handle_PASTA_sending(sock, mode, can_addr):
                 sock.sendto(bytes("{:03x} {:0{datasize}x}"               .format(carlaIDMapRPT['brake']     , (int) (prec.brake    * 0x3FF)       , datasize=2*fullSLCANMap[carlaIDMapRPT['brake']      ]['datasize']), 'ascii'), can_addr)
                 sock.sendto(bytes("{:03x} {:0{datasize}x}"               .format(carlaIDMapRPT['throttle']  , (int) (prec.throttle * 0x3FF)       , datasize=2*fullSLCANMap[carlaIDMapRPT['throttle']   ]['datasize']), 'ascii'), can_addr)
                 # not 2x data size as has 2 variable worth so half for each
-                sock.sendto(bytes("{:03x} {:0{datasize}x}{:0{datasize}x}".format(carlaIDMapRPT['rpm']       , engine_rpm, kmh                     , datasize=  fullSLCANMap[carlaIDMapRPT['rpm']        ]['datasize']), 'ascii'), can_addr)
-                # TODO 0 for torque
-                sock.sendto(bytes("{:03x} {:0{datasize}x}0000"           .format(carlaIDMapRPT['steer']     , carla_to_pasta_steer_map(prec.steer), datasize=2*fullSLCANMap[carlaIDMapRPT['steer']      ]['datasize']), 'ascii'), can_addr)
+                sock.sendto(bytes("{:03x} {:0{datasize}x}{:0{datasize}x}".format(carlaIDMapRPT['rpm']       , engine_rpm  , kmh                   , datasize=  fullSLCANMap[carlaIDMapRPT['rpm']        ]['datasize']), 'ascii'), can_addr)
+                sock.sendto(bytes("{:03x} {:0{datasize}x}{:0{datasize}x}".format(carlaIDMapRPT['steer']     , steer_mode_1, torque                , datasize=2*fullSLCANMap[carlaIDMapRPT['steer']      ]['datasize']), 'ascii'), can_addr)
                 # currently no way to get tire angle seperate from steer in CARLA for now just using same steering angle
                 sock.sendto(bytes("{:03x} {:0{datasize}x}"               .format(carlaIDMapRPT['tire_angle'], carla_to_pasta_steer_map(prec.steer), datasize=2*fullSLCANMap[carlaIDMapRPT['tire_angle'] ]['datasize']), 'ascii'), can_addr)
                 if send_50ms_period_msg:
@@ -1530,6 +1555,7 @@ g_pasta_rpm     = 0
 g_pasta_kmh     = 0 
 g_pasta_gear = 1
 g_pasta_ud_gear = 1
+g_pasta_front_lights = carla.VehicleLightState.NONE
 def handle_pasta_sock(sock, mode):
     control = carla.VehicleControl()
     control.manual_gear_shift = True
@@ -1615,6 +1641,22 @@ def handle_pasta_sock(sock, mode):
             elif (id == carlaIDMapRPT['engine']):
                 global g_ignition_on
                 g_ignition_on = data
+            elif (id == carlaIDMapCMD['lightFront']):
+                global g_pasta_front_lights
+                if   data == 0:
+                    frontLights = carla.VehicleLightState.NONE
+                elif data == 1:
+                    frontLights = carla.VehicleLightState.Position
+                elif data == 3:
+                    frontLights = carla.VehicleLightState.LowBeam  | carla.VehicleLightState.Position
+                elif data == 5:
+                    frontLights = carla.VehicleLightState.HighBeam | carla.VehicleLightState.Position
+                elif data == 7:
+                    frontLights = carla.VehicleLightState.HighBeam | carla.VehicleLightState.LowBeam | carla.VehicleLightState.Position
+                elif data == 6: # passing
+                    frontLights = carla.VehicleLightState.HighBeam
+                g_pasta_front_lights = data
+
         except Exception as e: # couldn't parse data or otherwise got a bad value clear it and wait for more input
             print(e)
             print(inputData)
@@ -1630,8 +1672,8 @@ def handle_pasta_sock(sock, mode):
         g_pasta_gear    = gear
 
 def update_hud(hud):
-    global g_pasta_control, g_pasta_rpm, g_pasta_kmh, g_pasta_gear        
-    hud.set_pasta_control(g_pasta_control, g_pasta_rpm, g_pasta_kmh, g_pasta_gear)
+    global                g_pasta_control, g_pasta_rpm, g_pasta_kmh, g_pasta_gear, g_pasta_front_lights
+    hud.set_pasta_control(g_pasta_control, g_pasta_rpm, g_pasta_kmh, g_pasta_gear, g_pasta_front_lights)
 
 def game_loop(args):
     pygame.init()
@@ -1720,7 +1762,6 @@ def game_loop(args):
             pts_left = (len(agent.get_local_planner().waypoints_queue) - num_min_waypoints) + len(agent.get_local_planner()._waypoint_buffer) + 1
             if not g_reached_goal and pts_left <= 0:
                 g_reached_goal = True
-                controller._autopilot_enabled = False
                 tot_target_reached += 1
                 world.hud.notification("The target has been reached " +
                                         str(tot_target_reached) + " times. Stopping Autopillot", seconds=4.0)
