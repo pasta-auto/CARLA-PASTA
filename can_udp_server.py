@@ -178,6 +178,9 @@ class CanServer(object):
                     # still going to receive just so manual control has a place to send to 
                     if (recData != None): 
                         if recData == b"kill":
+                            lfa6uMode0Set = bytes("t7D0800FF00FFFFFFFFFF\r\n", 'ascii')
+                            if Args.lfa6u:
+                                self.lfa6uSer.write(lfa6uMode0Set)
                             print("Got kill message; exitting")
                             global g_quit
                             g_quit = True
