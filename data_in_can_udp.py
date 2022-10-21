@@ -268,20 +268,14 @@ def input_loop(args):
                 # https://carla.readthedocs.io/en/latest/python_api/#carlavehiclelightstate
                 elif (id == carlaIDMap['lightFront']):
                     #print("light front ", hex(id), ":", data)
-                    if   data == 0:
-                        frontLights = carla.VehicleLightState.NONE
-                    elif data == 1:
-                        frontLights = carla.VehicleLightState.Position
-                    elif data == 3:
-                        frontLights = carla.VehicleLightState.LowBeam  | carla.VehicleLightState.Position
-                    elif data == 5:
-                        frontLights = carla.VehicleLightState.HighBeam | carla.VehicleLightState.Position
-                    elif data == 7:
-                        frontLights = carla.VehicleLightState.HighBeam | carla.VehicleLightState.LowBeam | carla.VehicleLightState.Position
-                    elif data == 6: # passing
-                        frontLights = carla.VehicleLightState.HighBeam
-                    else:
-                        logging.error("Unknown front light state: " + str(data))
+                    frontLights = carla.VehicleLightState.NONE
+                    if data & 1:
+                        frontLights |= carla.VehicleLightState.Position
+                    if data & 2:
+                        frontLights |= carla.VehicleLightState.LowBeam
+                    if data & 4:
+                        frontLights |= carla.VehicleLightState.HighBeam
+                    #logging.error("Unknown front light state: " + str(data))
                 elif (id == carlaIDMap['lightTurn']):
                     #print("light turn ", id, ":", data)
                     if   data == 0:
