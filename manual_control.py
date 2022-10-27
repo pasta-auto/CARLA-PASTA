@@ -399,6 +399,11 @@ def carla_to_pasta_light_map(current_lights):
     return pastaFrontLights, pastaTurnLights, pastaPassing
 
 def carla_to_pasta_steer_map(steer):
+    # clamp to be in range -1 to 1 otherwise conversion will fail
+    if steer < -1.0:
+        steer = -1.0
+    if steer > 1.0:
+        steer = 1.0
     pastaSteer = (int)(steer * 0x1FF)
     if (pastaSteer & (1 << (16 - 1))) != 0:
         pastaSteer += 1<<16
@@ -609,10 +614,6 @@ class KeyboardControl(object):
             elif event.type == pygame.KEYUP:
                 if self._is_quit_shortcut(event.key):
                     return True
-                elif event.key == K_k:
-                    self.use_joystick = not self.use_joystick
-                    world.hud.notification(
-                            'Controller %s' % ('On' if self.use_joystick else 'Off'))
                 elif event.key == K_BACKSPACE:
                     g_send_mutex.acquire()
                     #taking this out not using world.set_autopilot
@@ -678,8 +679,12 @@ class KeyboardControl(object):
                     else:
                         world.recording_start += 1
                     world.hud.notification("Recording start time is %d" % (world.recording_start))
-                if isinstance(self._control, carla.VehicleControl):
-                    if not pastaControl:
+                if not pastaControl:
+                    if event.key == K_k:
+                        self.use_joystick = not self.use_joystick
+                        world.hud.notification(
+                            'Controller %s' % ('On' if self.use_joystick else 'Off'))
+                    if isinstance(self._control, carla.VehicleControl):                    
                         if event.key == K_o:
                             global g_reroute_agent
                             world.hud.notification('Setting a new autopilot route')
@@ -1514,18 +1519,28 @@ def handle_PASTA_sending(sock, mode, can_addr):
             kmhF = 3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2)
             kmh = int(kmhF)
             steer_mode_1 = 0
-            if kmhF > 0.01: # if moving
-                if g_pasta_gear != 2: # and going forward (not in R)
-                    steer_mode_1 = 0
-                else:
-                    steer_mode_1 = 2 * prec.steer
-            else:
-                steer_mode_1 = prec.steer
             torque = kmh
             if torque < 0:
                 torque = 0
             if torque > 100:
                 torque = 100
+            #TODO come up with a better name basically need to split value sending to carlaIDMapRPT['rpm'] and carlaIDMapRPT['kmh'] when moving backwards
+            # if not moving backwards these will be the same so safe to send
+            backwards_kmh = kmh
+            if kmhF > 0.01: # if moving
+                if g_pasta_gear != 2: # and going forward (not in R)
+                    steer_mode_1 = 0
+                else: # moving backwards
+                    # double steering
+                    steer_mode_1 = 2 * prec.steer
+                    # give negative speed via 2's compliment negative
+                    backwards_kmh = (int) (-1 * kmh)
+                    if (backwards_kmh & (1 << (16 - 1))) != 0:
+                        backwards_kmh += 1<<16
+                    # half torque when moving backwards
+                    torque = (int)(torque/2)
+            else:
+                steer_mode_1 = prec.steer
             engine_rpm = g_rpm_this_tick
             engine_rpm = int(engine_rpm)
             if mode == 1: # SLCAN
@@ -1535,8 +1550,8 @@ def handle_PASTA_sending(sock, mode, can_addr):
                 sock.sendto(bytes("{:03x} {:0{datasize}x}"               .format(carlaIDMapRPT['brake']     , (int) (prec.brake    * 0x3FF)       , datasize=2*fullSLCANMap[carlaIDMapRPT['brake']      ]['datasize']), 'ascii'), can_addr)
                 sock.sendto(bytes("{:03x} {:0{datasize}x}"               .format(carlaIDMapRPT['throttle']  , (int) (prec.throttle * 0x3FF)       , datasize=2*fullSLCANMap[carlaIDMapRPT['throttle']   ]['datasize']), 'ascii'), can_addr)
                 # not 2x data size as has 2 variable worth so half for each
-                sock.sendto(bytes("{:03x} {:0{datasize}x}{:0{datasize}x}".format(carlaIDMapRPT['rpm']       , engine_rpm  , kmh                   , datasize=  fullSLCANMap[carlaIDMapRPT['rpm']        ]['datasize']), 'ascii'), can_addr)
-                sock.sendto(bytes("{:03x} {:0{datasize}x}{:0{datasize}x}".format(carlaIDMapRPT['steer']     , steer_mode_1, torque                , datasize=2*fullSLCANMap[carlaIDMapRPT['steer']      ]['datasize']), 'ascii'), can_addr)
+                sock.sendto(bytes("{:03x} {:0{datasize}x}{:0{datasize}x}".format(carlaIDMapRPT['rpm']       , engine_rpm  , backwards_kmh         , datasize=  fullSLCANMap[carlaIDMapRPT['rpm']        ]['datasize']), 'ascii'), can_addr)
+                sock.sendto(bytes("{:03x} {:0{datasize}x}{:0{datasize}x}".format(carlaIDMapRPT['steer']     , carla_to_pasta_steer_map(steer_mode_1), torque                , datasize=2*fullSLCANMap[carlaIDMapRPT['steer']      ]['datasize']), 'ascii'), can_addr)
                 # currently no way to get tire angle seperate from steer in CARLA for now just using same steering angle
                 sock.sendto(bytes("{:03x} {:0{datasize}x}"               .format(carlaIDMapRPT['tire_angle'], carla_to_pasta_steer_map(prec.steer), datasize=2*fullSLCANMap[carlaIDMapRPT['tire_angle'] ]['datasize']), 'ascii'), can_addr)
                 if send_50ms_period_msg:
