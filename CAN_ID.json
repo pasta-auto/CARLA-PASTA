@@ -125,7 +125,7 @@
         "88": {
             "source"     :"chasis",
             "execution"  :"power train",
-            "name"       :"steeering wheel operation position",
+            "name"       :"steering wheel operation position",
             "level"      :"command",
             "type"       :"operation",
             "period"     :10,
